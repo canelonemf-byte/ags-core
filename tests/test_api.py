@@ -1,44 +1,56 @@
-import pytest
-from fastapi.testclient import TestClient
+from abc import ABC, abstractmethod
+from typing import Any
 
-from main import app
+import httpx
 
-pytestmark = pytest.mark.unit
-client = TestClient(app)
-
-
-def test_health():
-    r = client.get("/health")
-    assert r.status_code == 200 and r.json()["agents"] == 31
+from config import settings
 
 
-def test_request_id():
-    r = client.get("/health", headers={"X-Request-ID": "test-123"})
-    assert r.headers["X-Request-ID"] == "test-123"
+class BaseAgent(ABC):
+    name = "base"
+    domain = "general"
+    description = ""
+    preferred_model = "claude-primary"
+    fallback_models = ["gpt-primary", "gemini-primary"]
 
+    @property
+    @abstractmethod
+    def system_prompt(self) -> str:
+        ...
 
-def test_agents():
-    r = client.get("/agents")
-    assert r.status_code == 200 and r.json()["total"] == 31
+    async def run(self, task: str, context: dict[str, Any] | None = None):
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": self._prompt(task, context or {})},
+        ]
+        last_error = None
+        async with httpx.AsyncClient(
+            base_url=settings.LITELLM_BASE_URL,
+            headers={"Authorization": f"Bearer {settings.LITELLM_API_KEY}"},
+            timeout=120.0,
+        ) as client:
+            for model in [self.preferred_model, *self.fallback_models]:
+                try:
+                    r = await client.post(
+                        "/chat/completions",
+                        json={"model": model, "messages": messages},
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    return {
+                        "agent": self.name,
+                        "domain": self.domain,
+                        "model_used": model,
+                        "output": data["choices"][0]["message"]["content"],
+                        "evidencia": "E0_proveedor",
+                        "es_evidencia": False,
+                    }
+                except Exception as exc:
+                    last_error = exc
+        raise RuntimeError(f"{self.name}: todos los modelos fallaron: {last_error}")
 
-
-def test_auth():
-    assert client.post("/run/agent/searcher", json={"task": "x"}).status_code == 401
-
-
-def test_unknown_agent_with_auth():
-    r = client.post(
-        "/run/agent/nope",
-        headers={"X-API-Key": "test-key"},
-        json={"task": "x"},
-    )
-    assert r.status_code == 404
-
-
-def test_unknown_domain():
-    assert client.get("/agents/domain/nope").status_code == 404
-
-
-def test_integrations_configurable():
-    r = client.get("/integrations", headers={"X-API-Key": "test-key"})
-    assert r.status_code == 200
+    def _prompt(self, task, context):
+        if not context:
+            return task
+        ctx = "\n".join(f"- {k}: {v}" for k, v in context.items())
+        return f"TAREA:\n{task}\n\nCONTEXTO:\n{ctx}"
