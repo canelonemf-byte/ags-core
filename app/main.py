@@ -6,10 +6,10 @@ from pydantic import BaseModel, Field
 
 import agents  # noqa: F401
 from config import settings
-from registry import agents_by_domain, all_agents, get_agent
 from orchestrator import orchestrator
+from registry import agents_by_domain, all_agents, get_agent
 
-app = FastAPI(title="AGs-Core", version="3.3.0")
+app = FastAPI(title="AGs-Core", version="3.4.0")
 
 
 class TaskRequest(BaseModel):
@@ -32,14 +32,25 @@ def auth(x_api_key: str | None):
         raise HTTPException(401, "API key invalida")
 
 
+async def litellm_state():
+    try:
+        async with httpx.AsyncClient(
+            base_url=settings.LITELLM_BASE_URL,
+            timeout=settings.HEALTH_TIMEOUT,
+        ) as client:
+            r = await client.get("/health/liveliness")
+        return "ok" if r.status_code == 200 else f"http_{r.status_code}"
+    except httpx.HTTPError:
+        return "unreachable"
+
+
 @app.get("/health")
-def health():
+async def health():
     return {
         "status": "ok",
         "agents": len(all_agents()),
-        "version": "3.3.0",
-        "litellm": False,
-        "docker": False,
+        "version": "3.4.0",
+        "litellm": await litellm_state(),
     }
 
 
@@ -62,14 +73,17 @@ def list_agents():
 @app.get("/models")
 async def models(x_api_key: str | None = Header(default=None)):
     auth(x_api_key)
-    async with httpx.AsyncClient(
-        base_url=settings.LITELLM_BASE_URL,
-        headers={"Authorization": f"Bearer {settings.LITELLM_API_KEY}"},
-        timeout=15,
-    ) as client:
-        r = await client.get("/v1/models")
-        r.raise_for_status()
-        return r.json()
+    try:
+        async with httpx.AsyncClient(
+            base_url=settings.LITELLM_BASE_URL,
+            headers={"Authorization": f"Bearer {settings.LITELLM_API_KEY}"},
+            timeout=15,
+        ) as client:
+            r = await client.get("/v1/models")
+            r.raise_for_status()
+            return r.json()
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"LiteLLM no disponible: {type(exc).__name__}")
 
 
 @app.get("/integrations")
@@ -98,7 +112,10 @@ async def run_single(name: str, req: TaskRequest, x_api_key: str | None = Header
         agent = get_agent(name)
     except KeyError:
         raise HTTPException(404, f"Agente {name} no existe")
-    return await agent.run(req.task, req.context)
+    try:
+        return await agent.run(req.task, req.context)
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)[:300])
 
 
 @app.post("/run/orchestrated")

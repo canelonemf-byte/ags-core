@@ -13,3 +13,8 @@ data/
 .DS_Store
 .vscode/
 .idea/
+
+artifacts/
+.venv_fix/
+.venv_verify/
+.reqs_light.txt
