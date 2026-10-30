@@ -1,41 +1,57 @@
-# AGs-Core
+# ags-core
 
-Multi-agent scientific API with 31 specialized agents.
+AGs-Core FastAPI multi-agent API and registry project
 
-## Quick start
+## Autoría
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt -r requirements-dev.txt
-cp .env.example .env
-# fill in .env with your keys
-pytest -m unit -q
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+- **Autor:** Lázaro López Paz, El Prat de Llobregat, Barcelona, España
+- **ORCID:** [0000-0001-8601-1963](https://orcid.org/0000-0001-8601-1963)
+- Elaborado con asistencia de inteligencia artificial
+- Sin afiliaciones institucionales
+
+## Estado
+
+Proyecto en desarrollo / documentación. No afirmar validación experimental salvo que el código o los informes del propio repositorio lo demuestren.
+
+## Contenido (raíz)
+
+```
+.env.example
+app/
+docker-compose.yml
+Dockerfile
+litellm_config.yaml
+pytest.ini
+README.md
+requirements-dev.txt
+requirements.txt
+tests/
 ```
 
-## Endpoints
+## Instalación
 
-- GET /health
-- GET /agents
-- GET /agents/domain/{domain}
-- POST /run/agent/{name}
-- POST /run/orchestrated
-- GET /integrations
-- GET /models
+```bash
+pip install -r requirements.txt
+```
 
-## Authentication
 
-The app validates `X-API-Key` against `AGS_API_KEY` in `.env`.
+## Uso
 
-## Domain split
+Archivos Python principales (revisar cada uno antes de ejecutar):
+- `app/__init__.py`
+- `app/agents/__init__.py`
+- `app/agents/compute.py`
+- `app/agents/domain.py`
+- `app/agents/lab.py`
+- `app/agents/multimodal.py`
+- `app/agents/orchestration.py`
+- `app/agents/research.py`
+- `app/agents/validation.py`
+- `app/base_agent.py`
+- `app/config.py`
+- `app/main.py`
 
-- research: 5
-- compute: 5
-- domain: 6
-- multimodal: 4
-- lab: 4
-- validation: 4
-- orchestration: 3
 
-Total: 31 agents.
+## Licencia
+
+Ver archivo `LICENSE` (o `LICENSE.md`) en la raíz. Documentación bajo CC BY 4.0 cuando aplique; código habitualmente MIT, salvo indicación contraria.
